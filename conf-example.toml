@@ -1,0 +1,4 @@
+[variables]
+plex-host = "http://localhost:32400"
+plex-token = "YOUR-PLEX-TOKEN-HERE"
+targetNumberOfEpisodes = 10
