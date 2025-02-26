@@ -6,18 +6,6 @@ import sys
 import os
 import tomllib
 
-class CLIVars:
-    plextoken = "MY_PLEX_TOKEN"
-    plexhost = "https://plex.example.com"
-    machineid = "1234"
-
-    playlistid = "12345"
-    playlistSearch = "episode.unwatched%3D1%26and%3D1%26show.country%3D679"
-    playlistName = "CanadaPlaylist.json"
-    playlistItemLimit = 20
-    trimOnly = False
-    verbose = False
-
 def getMachineIdentifier(plexhost, plextoken):
     machineResult = requests.get("{}/identity/?X-Plex-Token={}".format(plexhost, plextoken))
     plexDict = xmltodict.parse(machineResult.text)
