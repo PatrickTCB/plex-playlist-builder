@@ -3,6 +3,8 @@ import json
 import random
 import xmltodict
 import sys
+import os
+import tomllib
 
 class CLIVars:
     plextoken = "MY_PLEX_TOKEN"
@@ -20,54 +22,6 @@ def getMachineIdentifier(plexhost, plextoken):
     machineResult = requests.get("{}/identity/?X-Plex-Token={}".format(plexhost, plextoken))
     plexDict = xmltodict.parse(machineResult.text)
     return plexDict
-
-def parseArgs(allArgs):
-
-    v = CLIVars()
-    v.plextoken = "MY_PLEX_TOKEN" # https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
-    v.plexhost = "https://plex.example.com"
-    
-    # Example Dynamic Playlist
-    # This gets unwatached shows from Canada
-    # You could have as many instances of this block as there are playlists you want to update.
-    v.playlistid = "12345" # This you can pull from a the playlist URL.
-    v.playlistSearch = "episode.unwatched%3D1%26and%3D1%26show.country%3D679"
-    v.playlistName = "DynamicPlaylist.json"
-    v.playlistItemLimit = 20
-    v.trimOnly = False
-    v.verbose = False
-    i = 1
-    for arg in allArgs:
-        if arg[0] == "-":
-            try:
-                if arg[1:] == "plextoken":
-                    v.plextoken = allArgs[i]
-                elif arg[1:] == "plexhost":
-                    v.plexhost = allArgs[i]
-                elif arg[1:] == "machineid":
-                    v.machineid = allArgs[i]
-                elif arg[1:] == "playlistid":
-                    v.playlistid = allArgs[i]
-                elif arg[1:] == "playlistSearch":
-                    v.playlistSearch = allArgs[i]
-                elif arg[1:] == "playlistName":
-                    v.playlistName = allArgs[i]
-                elif arg[1:] == "playlistItemLimit" or arg[1:] == "targetNumberOfEpisodes":
-                    v.playlistItemLimit = int(allArgs[i])
-                elif arg[1:] == "trimOnly":
-                    v.trimOnly = True
-                elif arg[1:] == "v":
-                    v.verbose = True
-                else:
-                    print("'{}' is not a known argument.".format(arg[1:]))
-            except Exception as e:
-                print("Couldn't parse {}.\n{}", arg, e)
-                sys.exit(3)
-        i = i + 1
-    # if machineid wasn't manually set it should be set here
-    if v.machineid == "1234":
-        v.machineid = getMachineIdentifier(v.plexhost, v.plextoken)["MediaContainer"]["@machineIdentifier"]
-    return v
 
 def stringToFile(fileName, contentsRaw):
     contents = str(contentsRaw)
@@ -214,16 +168,28 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
 
 
 # Define some variables
-cliVars = parseArgs(sys.argv)
+verbose = False
+if "-v" in sys.argv:
+    verbose = True
 
-updatePlaylistFromFilter(
-    plexhost=cliVars.plexhost, 
-    plextoken=cliVars.plextoken, 
-    playlistid=cliVars.playlistid, 
-    playlistName=cliVars.playlistName, 
-    machineid=cliVars.machineid, 
-    playlistSearch=cliVars.playlistSearch, 
-    targetNumberOfEpisodes=cliVars.playlistItemLimit, 
-    trimOnly=cliVars.trimOnly, 
-    verbose=cliVars.verbose
-    )
+trimOnly = False
+if "-trim" in sys.argv:
+    trimOnly = True
+
+# Load playlists
+currentPath = os.path.realpath(__file__).replace("main.py", "")
+playlistFileString = fileToString("{}playlists.toml".format(currentPath))
+playlists = tomllib.loads(playlistFileString)
+
+# Load config
+confstring = fileToString("{}conf.toml".format(currentPath))
+conf = tomllib.loads(confstring)["variables"]
+
+plextoken = conf["plex-token"]
+plexhost = conf["plex-host"]
+targetNumberOfEpisodes = conf["targetNumberOfEpisodes"]
+machineid = getMachineIdentifier(plexhost, plextoken)["MediaContainer"]["@machineIdentifier"]
+
+for k in playlists.keys():
+    playlist = playlists[k]
+    updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], machineid=machineid, playlistSearch=playlist["playlistSearch"], targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose)
