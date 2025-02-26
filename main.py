@@ -28,7 +28,7 @@ def parseArgs(allArgs):
     v.plexhost = "https://plex.example.com"
     
     # Example Dynamic Playlist
-    # This gets untached shows from Canada
+    # This gets unwatached shows from Canada
     # You could have as many instances of this block as there are playlists you want to update.
     v.playlistid = "12345" # This you can pull from a the playlist URL.
     v.playlistSearch = "episode.unwatched%3D1%26and%3D1%26show.country%3D679"
