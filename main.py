@@ -29,6 +29,12 @@ def stringToFile(fileName, contentsRaw):
         output_file.write(contents)
         output_file.close()
 
+def fileToString(fileName) :
+    fileContents = ""
+    with open(fileName, 'r') as myfile:
+        fileContents = myfile.read()
+    return str(fileContents)
+
 def getCandidateTVShows(plexhost, plextoken, playlistSearch):
     episodeList = requests.get("{}/library/sections/2/all?X-Plex-Token={}&{}".format(plexhost, plextoken, playlistSearch))
     plexDict = xmltodict.parse(episodeList.text)
