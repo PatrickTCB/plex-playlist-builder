@@ -1,10 +1,13 @@
 import requests
+import sys
 import json
 import random
 import xmltodict
-import sys
 import os
 import tomllib
+import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 def getMachineIdentifier(plexhost, plextoken):
     machineResult = requests.get("{}/identity/?X-Plex-Token={}".format(plexhost, plextoken))
@@ -22,6 +25,7 @@ def fileToString(fileName) :
     with open(fileName, 'r') as myfile:
         fileContents = myfile.read()
     return str(fileContents)
+
 
 def getCandidateTVShows(plexhost, plextoken, playlistSearch):
     episodeList = requests.get("{}/library/sections/2/all?X-Plex-Token={}&{}".format(plexhost, plextoken, playlistSearch))
@@ -61,40 +65,52 @@ def addItemToPlaylist(plexhost, plextoken, playlistid, machineid, libraryid, ver
     addItemResult = requests.put(plexURL)
     plexDict = xmltodict.parse(addItemResult.text)
     plexDict["url"] = plexURL
-    if verbose:
-        print("Added item {} to playlist.".format(libraryid))
     return plexDict
 
-def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, machineid, playlistSearch, targetNumberOfEpisodes, trimOnly, verbose):
+def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, machineid, playlistSearch, siriName, siri, targetNumberOfEpisodes, trimOnly, verbose):
+    if verbose:
+        print("Geting old version of {}".format(playlistName))
     # Step One, remove watched Episodes from list
     oldPlaylist = getCurrentPlaylist(plexhost, plextoken, playlistid)
-    stringToFile(playlistName, json.dumps(oldPlaylist, indent=4))
-    if type([]) == type(oldPlaylist["MediaContainer"]["Video"]):
-        for episode in oldPlaylist["MediaContainer"]["Video"]:
+    if verbose:
+        stringToFile("old-{}".format(playlistName), json.dumps(oldPlaylist, indent=4))
+    if "Video" in oldPlaylist["MediaContainer"].keys():
+        if type([]) == type(oldPlaylist["MediaContainer"]["Video"]):
+            for episode in oldPlaylist["MediaContainer"]["Video"]:
+                if "@viewCount" in episode.keys():
+                    if int(episode["@viewCount"]) > 0:
+                        removal = removeFromPlaylist(plexhost, plextoken, playlistid, episode["@playlistItemID"])
+        else:
+            # if the playlist has only one item then MediaContainer.Video isn't a list, it's a dictionary. Weird, but that's probably an artifiact of my xmltodict stuff.
+            episode = oldPlaylist["MediaContainer"]["Video"]
             if "@viewCount" in episode.keys():
                 if int(episode["@viewCount"]) > 0:
                     removal = removeFromPlaylist(plexhost, plextoken, playlistid, episode["@playlistItemID"])
     else:
-        # if the playlist has only one item then MediaContainer.Video isn't a list, it's a dictionary. Weird, but that's probably an artifiact of my xmltodict stuff.
-        episode = oldPlaylist["MediaContainer"]["Video"]
-        if "@viewCount" in episode.keys():
-            if int(episode["@viewCount"]) > 0:
-                removal = removeFromPlaylist(plexhost, plextoken, playlistid, episode["@playlistItemID"])
+        if verbose:
+            print("No old episodes to remove from {}. It seems empty.".format(playlistName))
     if trimOnly:
         print("Not adding any shows, just removing.")
         return
     showsPresent = []
     showsToAddOptions = []
     newPlaylist = getCurrentPlaylist(plexhost, plextoken, playlistid)
-    if type([]) == type(newPlaylist["MediaContainer"]["Video"]):
-        for episode in newPlaylist["MediaContainer"]["Video"]:
+    if verbose:
+        stringToFile("mostrecentlist.json", json.dumps(newPlaylist))
+    if "Video" in newPlaylist["MediaContainer"].keys():
+        if type([]) == type(newPlaylist["MediaContainer"]["Video"]):
+            for episode in newPlaylist["MediaContainer"]["Video"]:
+                showsPresent.append(episode["@grandparentTitle"])
+        else:
+            episode = newPlaylist["MediaContainer"]["Video"]
             showsPresent.append(episode["@grandparentTitle"])
     else:
-        episode = newPlaylist["MediaContainer"]["Video"]
-        showsPresent.append(episode["@grandparentTitle"])
+        if verbose:
+            print("{} seems empty so the showsPresent list is also empty".format(playlistName))
 
     if len(showsPresent) < targetNumberOfEpisodes:
-        print("Only {} episodes in {}. Adding more".format(len(showsPresent), playlistName))    
+        if siri == False:
+            print("Only {} episodes in {}. Adding more".format(len(showsPresent), siriName))    
         showCandidates = getCandidateTVShows(plexhost, plextoken, playlistSearch)
         showOptionsTitles = []
         for show in showCandidates["MediaContainer"]["Directory"]:
@@ -103,14 +119,15 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
                 showOptionsTitles.append(show["@title"])
         if verbose:
             print("Show options: {}".format(showOptionsTitles))
-        stringToFile("showsToAdd.json", json.dumps(showsToAddOptions))
+            stringToFile("showsToAdd.json", json.dumps(showsToAddOptions))
         addCount = targetNumberOfEpisodes - len(showsPresent)
         if len(showsToAddOptions) > addCount:
             showsToAdd = random.sample(showsToAddOptions, addCount)
         else:
             showsToAdd = showsToAddOptions
         showsAdded = []
-        print("Taking {} random shows from pool of {}.".format(len(showsToAdd), len(showsToAddOptions)))
+        if siri == False:
+            print("Taking {} random shows from pool of {}.".format(len(showsToAdd), len(showsToAddOptions)))
         for show in showsToAdd:
             unwatchedEpisodes = getUnwatchedEpisodeFromShow(plexhost, plextoken, show["@ratingKey"])
             if verbose:
@@ -156,12 +173,20 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
             elif i == 0:
                 showsAddedString = show
             i = i + 1
-        print("Added new episodes to {} from {}.".format(playlistName, showsAddedString))
+        if len(showsToAdd) > 0:
+            print("Added new episodes to {} from {}.".format(siriName, showsAddedString))
+        else:
+            print("No new shows can be added to {}.".format(siriName))
+            if verbose:
+                print("While the number of episodes in {} is {} and the target number of episodes was {}. There were only {} canditate shows. Therefore no episodes could be added to playlist.".format(siriName, len(showsPresent), targetNumberOfEpisodes, len(showCandidates["MediaContainer"]["Directory"])))
     else:
-        print("Already {} shows in {}. No need for more.".format(len(showsPresent), playlistName))
-
+        print("Already {} shows in {}. No need for more.".format(len(showsPresent), siriName))
 
 # Define some variables
+siri = False
+if "-siri" in sys.argv:
+    siri = True
+
 verbose = False
 if "-v" in sys.argv:
     verbose = True
@@ -170,20 +195,47 @@ trimOnly = False
 if "-trim" in sys.argv:
     trimOnly = True
 
-# Load playlists
-currentPath = os.path.realpath(__file__).replace("main.py", "")
-playlistFileString = fileToString("{}playlists.toml".format(currentPath))
-playlists = tomllib.loads(playlistFileString)
+if siri == False:
+    if "RUNHOUR" in os.environ:
+        print("Script started. Will update playlists at {}h".format(os.environ["RUNHOUR"]))
+    else:
+        print("Script started. No RUNHOUR set, so the playlists will just updated now one time.")
 
-# Load config
-confstring = fileToString("{}conf.toml".format(currentPath))
-conf = tomllib.loads(confstring)["variables"]
+loop = True
+while loop:
+    now = datetime.now(ZoneInfo(os.environ["TIMEZONE"]))
+    todayDate = now.strftime("%Y-%m-%d %H:%M:%S")
+    thisHour = now.strftime("%H")
+    if "RUNHOUR" in os.environ:
+        runHour = os.environ["RUNHOUR"]
+    else:
+        runHour = thisHour
+    if siri:
+        runHour = thisHour
+    if str(runHour) == str(thisHour):
+        print("Starting: {}".format(todayDate))
+        # Load playlists
+        currentPath = os.path.realpath(__file__).replace("main.py", "")
+        playlistFileString = fileToString("{}playlists.toml".format(currentPath))
+        playlists = tomllib.loads(playlistFileString)
 
-plextoken = conf["plex-token"]
-plexhost = conf["plex-host"]
-targetNumberOfEpisodes = conf["targetNumberOfEpisodes"]
-machineid = getMachineIdentifier(plexhost, plextoken)["MediaContainer"]["@machineIdentifier"]
+        # Load config
+        confstring = fileToString("{}conf.toml".format(currentPath))
+        conf = tomllib.loads(confstring)["variables"]
 
-for k in playlists.keys():
-    playlist = playlists[k]
-    updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], machineid=machineid, playlistSearch=playlist["playlistSearch"], targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose)
+        plextoken = conf["plex-token"]
+        plexhost = conf["plex-host"]
+        targetNumberOfEpisodes = conf["targetNumberOfEpisodes"]
+        machineid = getMachineIdentifier(plexhost, plextoken)["MediaContainer"]["@machineIdentifier"]
+
+        for k in playlists.keys():
+            playlist = playlists[k]
+            print("Updating {}".format(playlist["siriName"]))
+            updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], machineid=machineid, playlistSearch=playlist["playlistSearch"], siriName=playlist["siriName"], siri=siri, targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose)
+    if siri:
+        loop = False
+    elif "RUNHOUR" not in os.environ:
+        loop = False
+    else:
+        time.sleep(3600)
+    
