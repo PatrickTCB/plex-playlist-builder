@@ -67,7 +67,7 @@ def addItemToPlaylist(plexhost, plextoken, playlistid, machineid, libraryid, ver
     plexDict["url"] = plexURL
     return plexDict
 
-def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, machineid, playlistSearch, siriName, siri, targetNumberOfEpisodes, trimOnly, verbose):
+def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, machineid, playlistSearch, spokenOutputName, spokenOutput, targetNumberOfEpisodes, trimOnly, verbose):
     if verbose:
         print("Geting old version of {}".format(playlistName))
     # Step One, remove watched Episodes from list
@@ -109,8 +109,8 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
             print("{} seems empty so the showsPresent list is also empty".format(playlistName))
 
     if len(showsPresent) < targetNumberOfEpisodes:
-        if siri == False:
-            print("Only {} episodes in {}. Adding more".format(len(showsPresent), siriName))    
+        if spokenOutput == False:
+            print("Only {} episodes in {}. Adding more".format(len(showsPresent), spokenOutputName))    
         showCandidates = getCandidateTVShows(plexhost, plextoken, playlistSearch)
         showOptionsTitles = []
         for show in showCandidates["MediaContainer"]["Directory"]:
@@ -126,7 +126,7 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
         else:
             showsToAdd = showsToAddOptions
         showsAdded = []
-        if siri == False:
+        if spokenOutput == False:
             print("Taking {} random shows from pool of {}.".format(len(showsToAdd), len(showsToAddOptions)))
         for show in showsToAdd:
             unwatchedEpisodes = getUnwatchedEpisodeFromShow(plexhost, plextoken, show["@ratingKey"])
@@ -174,18 +174,18 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
                 showsAddedString = show
             i = i + 1
         if len(showsToAdd) > 0:
-            print("Added new episodes to {} from {}.".format(siriName, showsAddedString))
+            print("Added new episodes to {} from {}.".format(spokenOutputName, showsAddedString))
         else:
-            print("No new shows can be added to {}.".format(siriName))
+            print("No new shows can be added to {}.".format(spokenOutputName))
             if verbose:
-                print("While the number of episodes in {} is {} and the target number of episodes was {}. There were only {} canditate shows. Therefore no episodes could be added to playlist.".format(siriName, len(showsPresent), targetNumberOfEpisodes, len(showCandidates["MediaContainer"]["Directory"])))
+                print("While the number of episodes in {} is {} and the target number of episodes was {}. There were only {} canditate shows. Therefore no episodes could be added to playlist.".format(spokenOutputName, len(showsPresent), targetNumberOfEpisodes, len(showCandidates["MediaContainer"]["Directory"])))
     else:
-        print("Already {} shows in {}. No need for more.".format(len(showsPresent), siriName))
+        print("Already {} shows in {}. No need for more.".format(len(showsPresent), spokenOutputName))
 
 # Define some variables
-siri = False
-if "-siri" in sys.argv:
-    siri = True
+spokenOutput = False
+if "-spokenOutput" in sys.argv:
+    spokenOutput = True
 
 verbose = False
 if "-v" in sys.argv:
@@ -195,7 +195,7 @@ trimOnly = False
 if "-trim" in sys.argv:
     trimOnly = True
 
-if siri == False:
+if spokenOutput == False:
     if "RUNHOUR" in os.environ:
         print("Script started. Will update playlists at {}h".format(os.environ["RUNHOUR"]))
     else:
@@ -210,7 +210,7 @@ while loop:
         runHour = os.environ["RUNHOUR"]
     else:
         runHour = thisHour
-    if siri:
+    if spokenOutput:
         runHour = thisHour
     if str(runHour) == str(thisHour):
         print("Starting: {}".format(todayDate))
@@ -230,9 +230,9 @@ while loop:
 
         for k in playlists.keys():
             playlist = playlists[k]
-            print("Updating {}".format(playlist["siriName"]))
-            updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], machineid=machineid, playlistSearch=playlist["playlistSearch"], siriName=playlist["siriName"], siri=siri, targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose)
-    if siri:
+            print("Updating {}".format(playlist["spokenOutputName"]))
+            updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], machineid=machineid, playlistSearch=playlist["playlistSearch"], spokenOutputName=playlist["spokenOutputName"], spokenOutput=spokenOutput, targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose)
+    if spokenOutput:
         loop = False
     elif "RUNHOUR" not in os.environ:
         loop = False
