@@ -9,7 +9,8 @@ RUN python3 -m pip install xmltodict
 RUN python3 -m pip install requests
 RUN python3 -m pip install tzdata
 
-ENV BUILDID=""
+ARG BUILDID
+RUN echo "Build ID - $BUILDID" > /app/buildid.txt
 
 ENV RUNHOUR=18
 ENV TIMEZONE="Europe/Berlin"
