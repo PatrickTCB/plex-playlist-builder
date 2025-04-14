@@ -1,7 +1,9 @@
 FROM python:3
 
 RUN mkdir app
-ADD ./app app/
+ADD ./conf.toml app/
+ADD ./playlists.toml app/
+ADD ./main.py app/
 
 RUN python3 -m pip install xmltodict
 RUN python3 -m pip install requests
