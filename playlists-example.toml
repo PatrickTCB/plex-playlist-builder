@@ -3,15 +3,18 @@
 playlistid = "11111"
 playlistSearch = "episode.unwatched=1&and=1&show.network=90469"
 name = "cbc.json"
+spokenOutputName = "CBC Diamond"
 
 [german-tv]
 # This playlist will get shows made in Germany
 playlistid = "22222"
 playlistSearch = "show.country=835&and=1&episode.unwatched=1"
 name = "GermanTV.json"
+spokenOutputName = "From Germany with Love"
 
 [ghosts]
 # This playlist will get shows where the episode title contains the word "Ghost"
 playlistid = "33333"
 playlistSearch = "episode.title=Ghost&and=1&episode.unwatched=1"
 name = "Ghosts.json"
+spokenOutputName = "Spooky Ghost List"
