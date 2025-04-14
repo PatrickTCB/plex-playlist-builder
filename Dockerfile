@@ -9,6 +9,8 @@ RUN python3 -m pip install xmltodict
 RUN python3 -m pip install requests
 RUN python3 -m pip install tzdata
 
+ARG BUILDID
+
 ENV RUNHOUR=18
 ENV TIMEZONE="Europe/Berlin"
 
