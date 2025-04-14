@@ -37,3 +37,7 @@ To just trim playlists of watched episodes without adding new ones
 `python3 main.py -trim`
 
 I run this script via a cron job on my Plex server. But it can be run anywhere that can access your Plex server.
+
+If you're using a voice assistant (like Siri) which can run commands like this, you can optimize the output to be spoken using the flag `-spokenOutput`.
+
+`python3 main.py -spokenOutput`
