@@ -213,7 +213,8 @@ while loop:
     if spokenOutput:
         runHour = thisHour
     if str(runHour) == str(thisHour):
-        print("Starting: {}".format(todayDate))
+        if spokenOutput == False:
+            print("Starting: {}".format(todayDate))
         # Load playlists
         currentPath = os.path.realpath(__file__).replace("main.py", "")
         playlistFileString = fileToString("{}playlists.toml".format(currentPath))
