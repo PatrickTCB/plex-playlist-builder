@@ -231,7 +231,8 @@ while loop:
 
         for k in playlists.keys():
             playlist = playlists[k]
-            print("Updating {}".format(playlist["spokenOutputName"]))
+            if spokenOutput == False:
+                print("Updating {}".format(playlist["spokenOutputName"]))
             updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], machineid=machineid, playlistSearch=playlist["playlistSearch"], spokenOutputName=playlist["spokenOutputName"], spokenOutput=spokenOutput, targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose)
     if spokenOutput:
         loop = False
