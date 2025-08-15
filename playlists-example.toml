@@ -9,6 +9,7 @@ spokenOutputName = "CBC Diamond"
 # This playlist will get shows made in Germany
 playlistid = "22222"
 playlistSearch = "show.country=835&and=1&episode.unwatched=1"
+playlistShows = [ "118679" ]
 name = "GermanTV.json"
 spokenOutputName = "From Germany with Love"
 
