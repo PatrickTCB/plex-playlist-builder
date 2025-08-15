@@ -60,6 +60,26 @@ def getUnwatchedEpisodeFromShow(plexhost, plextoken, showid):
     plexDict = xmltodict.parse(episodeResult.text)
     return plexDict
 
+def getUnwatchedEpisodeFromPlaylist(plexhost, plextoken, playlistID, existingPlaylistItems):
+    playlistEpisode = 0
+    playlistResult = requests.get("{}/playlists/{}/items?X-Plex-Token={}".format(plexhost, playlistID, plextoken))
+    plexDict = xmltodict.parse(playlistResult.text)
+    for episode in plexDict["MediaContainer"]["Video"]:
+        if "@viewCount" in episode.keys():
+            if int(episode["@viewCount"]) == 0:
+                if episode["@key"] not in existingPlaylistItems:
+                    return episode["@key"]
+                else:
+                    # This means the next unwatched episode from this playlist is already in the playlist
+                    return 0
+        else:
+            if episode["@key"] not in existingPlaylistItems:
+                return episode["@key"]
+            else:
+                # This means the next unwatched episode from this playlist is already in the playlist
+                return 0
+    return playlistEpisode
+
 def addItemToPlaylist(plexhost, plextoken, playlistid, machineid, libraryid, verbose):
     plexURL = "{}/playlists/{}/items?X-Plex-Token={}&uri=server://{}/com.plexapp.plugins.library{}".format(plexhost, playlistid, plextoken, machineid, libraryid)
     addItemResult = requests.put(plexURL)
@@ -67,11 +87,12 @@ def addItemToPlaylist(plexhost, plextoken, playlistid, machineid, libraryid, ver
     plexDict["url"] = plexURL
     return plexDict
 
-def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, machineid, playlistSearch, spokenOutputName, spokenOutput, targetNumberOfEpisodes, trimOnly, verbose):
+def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, playlistShows, machineid, playlistSearch, spokenOutputName, spokenOutput, targetNumberOfEpisodes, trimOnly, verbose, dryRun):
     if verbose:
         print("Geting old version of {}".format(playlistName))
     # Step One, remove watched Episodes from list
     oldPlaylist = getCurrentPlaylist(plexhost, plextoken, playlistid)
+    existingPlaylistItems = []
     if verbose:
         stringToFile("old-{}".format(playlistName), json.dumps(oldPlaylist, indent=4))
     if "Video" in oldPlaylist["MediaContainer"].keys():
@@ -79,13 +100,25 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
             for episode in oldPlaylist["MediaContainer"]["Video"]:
                 if "@viewCount" in episode.keys():
                     if int(episode["@viewCount"]) > 0:
-                        removal = removeFromPlaylist(plexhost, plextoken, playlistid, episode["@playlistItemID"])
+                        if dryRun:
+                            print("Dry Run. Not removing {} from {}.".format(episode["@playlistItemID"], playlistid))
+                        else:
+                            removeFromPlaylist(plexhost, plextoken, playlistid, episode["@playlistItemID"])
+                else:
+                    existingPlaylistItems.append(episode["@key"])
         else:
             # if the playlist has only one item then MediaContainer.Video isn't a list, it's a dictionary. Weird, but that's probably an artifiact of my xmltodict stuff.
             episode = oldPlaylist["MediaContainer"]["Video"]
             if "@viewCount" in episode.keys():
                 if int(episode["@viewCount"]) > 0:
-                    removal = removeFromPlaylist(plexhost, plextoken, playlistid, episode["@playlistItemID"])
+                    if dryRun:
+                        print("Dry Run. Not removing {} from {}.".format(episode["@playlistItemID"], playlistid))
+                    else:
+                        removeFromPlaylist(plexhost, plextoken, playlistid, episode["@playlistItemID"])
+                else:
+                    existingPlaylistItems.append(episode["@key"])
+            else:
+                existingPlaylistItems.append(episode["@key"])
     else:
         if verbose:
             print("No old episodes to remove from {}. It seems empty.".format(playlistName))
@@ -120,14 +153,24 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
         if verbose:
             print("Show options: {}".format(showOptionsTitles))
             stringToFile("showsToAdd.json", json.dumps(showsToAddOptions))
-        addCount = targetNumberOfEpisodes - len(showsPresent)
+        playlistShowsAdded = 0
+        if targetNumberOfEpisodes - len(showsPresent) > 0:
+            for playlistShow in playlistShows:
+                unwatchedEpisode = getUnwatchedEpisodeFromPlaylist(plexhost, plextoken, playlistShow, existingPlaylistItems)
+                if unwatchedEpisode != 0:
+                    playlistShowsAdded = playlistShowsAdded + 1
+                    if dryRun:
+                        print("Was going to add {} from playlistid {}".format(unwatchedEpisode, playlistShow))
+                    else:
+                        addItemToPlaylist(plexhost, plextoken, playlistid, machineid, unwatchedEpisode, verbose)
+        addCount = targetNumberOfEpisodes - len(showsPresent) - playlistShowsAdded
         if len(showsToAddOptions) > addCount:
             showsToAdd = random.sample(showsToAddOptions, addCount)
         else:
             showsToAdd = showsToAddOptions
         showsAdded = []
         if spokenOutput == False:
-            print("Taking {} random shows from pool of {}.".format(len(showsToAdd), len(showsToAddOptions)))
+            print("Taking {} random shows from pool of {} shows and {} playlists.".format(len(showsToAdd), len(showsToAddOptions), len(playlistShows)))
         for show in showsToAdd:
             unwatchedEpisodes = getUnwatchedEpisodeFromShow(plexhost, plextoken, show["@ratingKey"])
             if verbose:
@@ -157,7 +200,10 @@ def updatePlaylistFromFilter(plexhost, plextoken, playlistid, playlistName, mach
             if libraryid != "none":
                 if verbose:
                     print("New {} episode being added.".format(show["@title"]))
-                addResult = addItemToPlaylist(plexhost, plextoken, playlistid, machineid, libraryid, verbose)
+                if dryRun:
+                    print("Would have added episode {} to playlist {}".format(libraryid, playlistid))
+                else:
+                    addItemToPlaylist(plexhost, plextoken, playlistid, machineid, libraryid, verbose)
                 #stringToFile("addResult-{}.json".format(libraryid.replace("/", ".")), json.dumps(addResult))
                 showsAdded.append(show["@title"])
             else:
@@ -195,6 +241,10 @@ trimOnly = False
 if "-trim" in sys.argv:
     trimOnly = True
 
+dryRun = False
+if "-dryRun" in sys.argv:
+    dryRun = True
+
 if spokenOutput == False:
     if "RUNHOUR" in os.environ:
         print("Script started. Will update playlists at {}h".format(os.environ["RUNHOUR"]))
@@ -213,7 +263,8 @@ while loop:
     if spokenOutput:
         runHour = thisHour
     if str(runHour) == str(thisHour):
-        print("Starting: {}".format(todayDate))
+        if spokenOutput == False:
+            print("Starting: {}".format(todayDate))
         # Load playlists
         currentPath = os.path.realpath(__file__).replace("main.py", "")
         playlistFileString = fileToString("{}playlists.toml".format(currentPath))
@@ -230,8 +281,12 @@ while loop:
 
         for k in playlists.keys():
             playlist = playlists[k]
-            print("Updating {}".format(playlist["spokenOutputName"]))
-            updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], machineid=machineid, playlistSearch=playlist["playlistSearch"], spokenOutputName=playlist["spokenOutputName"], spokenOutput=spokenOutput, targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose)
+            # playlistShows are playlists that the tool will pretend are shows.
+            if "playlistShows" not in playlist.keys():
+                playlist["playlistShows"] = []
+            if spokenOutput == False:
+                print("Updating {}".format(playlist["spokenOutputName"]))
+            updatePlaylistFromFilter(plexhost=plexhost, plextoken=plextoken, playlistid=playlist["playlistid"], playlistName=playlist["name"], playlistShows=playlist["playlistShows"], machineid=machineid, playlistSearch=playlist["playlistSearch"], spokenOutputName=playlist["spokenOutputName"], spokenOutput=spokenOutput, targetNumberOfEpisodes=targetNumberOfEpisodes, trimOnly=trimOnly, verbose=verbose, dryRun=dryRun)
     if spokenOutput:
         loop = False
     elif "RUNHOUR" not in os.environ:
